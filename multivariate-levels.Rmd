@@ -65,7 +65,7 @@ Now let's fit our model with Stan:
 library(rstan)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
-m <- stan("multivariate-levels.stan", 
+m <- stan("multi.stan", 
   data = list(J = 4, K = 3, N = nrow(Y), x = X, y = Y),
   iter = 300)
 print(m, pars = c("beta", "L_sigma", "Omega"), probs = c(0.1, 0.5, 0.9))

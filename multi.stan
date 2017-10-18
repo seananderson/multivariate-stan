@@ -1,3 +1,4 @@
+// based on 9.15 Multivariate Outcomes Stan manual section
 data { 
   int<lower=1> K;
   int<lower=1> J;
