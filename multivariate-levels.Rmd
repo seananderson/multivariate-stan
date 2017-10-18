@@ -1,0 +1,85 @@
+# Simulating and fitting a 4 treatment experiment with correlated response variables
+
+Let's simulate some data from a 4 treatment experiment. We will have 100 observations. 
+
+```{r}
+set.seed(42)
+N <- 100
+X <- matrix(c(
+  c(rep(1, 25), rep(0, 75)),
+  c(rep(0, 25), rep(1, 25), rep(0, 50)),
+  c(rep(0, 50), rep(1, 25), rep(0, 25)),
+  c(rep(0, 75), rep(1, 25))),
+  ncol = 4)
+head(X)
+tail(X)
+```
+
+Let's create a correlation matrix and then calculate the covariance matrix given specified standard deviations. We will have 3 response variables.
+
+```{r}
+Omega <- rbind( # correlation matrix
+  c(1, 0.5, 0.9),
+  c(0.5, 1, 0.7),
+  c(0.9, 0.7, 1)
+)
+sigma <- c(0.2, 0.3, 0.4) # residual SDs
+Sigma <- diag(sigma) %*% Omega %*% diag(sigma) # covariance matrix
+Sigma
+Errors <- mvtnorm::rmvnorm(N, c(0,0,0), Sigma)
+pairs(Errors)
+round(cor(Errors), 2) # realized correlation
+```
+
+Now let's randomly generate some treatment effects or coefficients: 
+
+```{r}
+Betas <- round(matrix(runif(12, -1, 1), nrow = 3), 1)
+Betas
+```
+
+And multiply our coefficients by the design matrix and add on the correlated errors to get our response measurements. 
+
+```{r}
+Y <- X %*% t(Betas) + Errors
+```
+
+Let's look at the data in various ways:
+
+```{r, warning=FALSE, message=FALSE}
+pairs(Y)
+library(ggplot2)
+library(dplyr)
+d <- data.frame(x = c(rep(1, 25), rep(2, 25), rep(3, 25), rep(4, 25)), Y)
+d <- reshape2::melt(d, id.vars = "x") %>% 
+  mutate(variable = gsub("X", "Y", variable))
+ggplot(d, aes(x, value)) + 
+  geom_point(position = position_jitter(width = 0.1)) + 
+  facet_wrap(~variable) +
+  xlab("Treatment number")
+```
+
+Now let's fit our model with Stan:
+
+```{r, warning=FALSE, message=FALSE}
+library(rstan)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+m <- stan("multivariate-levels.stan", 
+  data = list(J = 4, K = 3, N = nrow(Y), x = X, y = Y),
+  iter = 300)
+print(m, pars = c("beta", "L_sigma", "Omega"), probs = c(0.1, 0.5, 0.9))
+```
+
+`beta` is the matrix of coefficients 
+`Omega` are the elements of the correlation matrix
+`L_sigma` contains the residual standard deviations
+
+```{r}
+plot(m, pars = "beta")
+Betas
+plot(m, pars = "Omega")
+Omega
+plot(m, pars = "L_sigma")
+sigma
+```
